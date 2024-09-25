@@ -1,0 +1,98 @@
+{
+	"$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+	"contentVersion": "1.0.0.0",
+	"parameters": {
+		"factoryName": {
+			"type": "string",
+			"metadata": "Data Factory name",
+			"defaultValue": "adf-hw1"
+		},
+		"ls_sahw1_accountKey": {
+			"type": "secureString",
+			"metadata": "Secure string for 'accountKey' of 'ls_sahw1'"
+		},
+		"ls_sql_hw1_password": {
+			"type": "secureString",
+			"metadata": "Secure string for 'password' of 'ls_sql_hw1'"
+		},
+		"ls_http_hw1_properties_typeProperties_url": {
+			"type": "string",
+			"defaultValue": "@{linkedService().link}"
+		},
+		"ls_kv_hw1_properties_typeProperties_baseUrl": {
+			"type": "string",
+			"defaultValue": "https://kvhw1.vault.azure.net/"
+		},
+		"ls_sahw1_properties_typeProperties_url": {
+			"type": "string",
+			"defaultValue": "https://sahw1.dfs.core.windows.net/"
+		},
+		"ls_sql_hw1_properties_typeProperties_server": {
+			"type": "string",
+			"defaultValue": "sql-server-hw-1.database.windows.net"
+		},
+		"ls_sql_hw1_properties_typeProperties_database": {
+			"type": "string",
+			"defaultValue": "db_reest_tz_ua"
+		},
+		"ls_sql_hw1_properties_typeProperties_userName": {
+			"type": "string",
+			"defaultValue": "admin1"
+		},
+		"containerUri": {
+			"type": "string",
+			"metadata": "URI to storage account containing linked ARM templates"
+		},
+		"containerSasToken": {
+			"type": "string",
+			"metadata": "Sas token to storage account containing linked ARM templates"
+		}
+	},
+	"variables": {
+		"factoryId": "[concat('Microsoft.DataFactory/factories/', parameters('factoryName'))]"
+	},
+	"resources": [
+		{
+			"name": "adf-hw1_ArmTemplate_0",
+			"type": "Microsoft.Resources/deployments",
+			"apiVersion": "2024-03-01",
+			"properties": {
+				"mode": "incremental",
+				"templateLink": {
+					"uri": "[concat(parameters('containerUri'), '/ArmTemplate_0.json', parameters('containerSasToken'))]",
+					"contentVersion": "1.0.0.0"
+				},
+				"parameters": {
+					"factoryName": {
+						"value": "[parameters('factoryName')]"
+					},
+					"ls_sahw1_accountKey": {
+						"value": "[parameters('ls_sahw1_accountKey')]"
+					},
+					"ls_sql_hw1_password": {
+						"value": "[parameters('ls_sql_hw1_password')]"
+					},
+					"ls_http_hw1_properties_typeProperties_url": {
+						"value": "[parameters('ls_http_hw1_properties_typeProperties_url')]"
+					},
+					"ls_kv_hw1_properties_typeProperties_baseUrl": {
+						"value": "[parameters('ls_kv_hw1_properties_typeProperties_baseUrl')]"
+					},
+					"ls_sahw1_properties_typeProperties_url": {
+						"value": "[parameters('ls_sahw1_properties_typeProperties_url')]"
+					},
+					"ls_sql_hw1_properties_typeProperties_server": {
+						"value": "[parameters('ls_sql_hw1_properties_typeProperties_server')]"
+					},
+					"ls_sql_hw1_properties_typeProperties_database": {
+						"value": "[parameters('ls_sql_hw1_properties_typeProperties_database')]"
+					},
+					"ls_sql_hw1_properties_typeProperties_userName": {
+						"value": "[parameters('ls_sql_hw1_properties_typeProperties_userName')]"
+					}
+				}
+			},
+			"dependsOn": []
+		}
+	]
+}

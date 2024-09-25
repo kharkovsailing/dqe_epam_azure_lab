@@ -1,0 +1,1164 @@
+{
+	"$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+	"contentVersion": "1.0.0.0",
+	"parameters": {
+		"factoryName": {
+			"type": "string",
+			"metadata": "Data Factory name",
+			"defaultValue": "adf-hw1"
+		},
+		"ls_sahw1_accountKey": {
+			"type": "secureString",
+			"metadata": "Secure string for 'accountKey' of 'ls_sahw1'"
+		},
+		"ls_sql_hw1_password": {
+			"type": "secureString",
+			"metadata": "Secure string for 'password' of 'ls_sql_hw1'"
+		},
+		"ls_http_hw1_properties_typeProperties_url": {
+			"type": "string",
+			"defaultValue": "@{linkedService().link}"
+		},
+		"ls_kv_hw1_properties_typeProperties_baseUrl": {
+			"type": "string",
+			"defaultValue": "https://kvhw1.vault.azure.net/"
+		},
+		"ls_sahw1_properties_typeProperties_url": {
+			"type": "string",
+			"defaultValue": "https://sahw1.dfs.core.windows.net/"
+		},
+		"ls_sql_hw1_properties_typeProperties_server": {
+			"type": "string",
+			"defaultValue": "sql-server-hw-1.database.windows.net"
+		},
+		"ls_sql_hw1_properties_typeProperties_database": {
+			"type": "string",
+			"defaultValue": "db_reest_tz_ua"
+		},
+		"ls_sql_hw1_properties_typeProperties_userName": {
+			"type": "string",
+			"defaultValue": "admin1"
+		}
+	},
+	"variables": {
+		"factoryId": "[concat('Microsoft.DataFactory/factories/', parameters('factoryName'))]"
+	},
+	"resources": [
+		{
+			"name": "[concat(parameters('factoryName'), '/pl_task3_1')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "cp_reestr_list_to_db",
+						"type": "Copy",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "JsonSource",
+								"storeSettings": {
+									"type": "HttpReadSettings",
+									"requestMethod": "GET"
+								},
+								"formatSettings": {
+									"type": "JsonReadSettings"
+								}
+							},
+							"sink": {
+								"type": "AzureSqlSink",
+								"preCopyScript": "DELETE FROM [ing].[reestr_list]",
+								"writeBehavior": "insert",
+								"sqlWriterUseTableLock": false,
+								"disableMetricsCollection": false
+							},
+							"enableStaging": false,
+							"translator": {
+								"type": "TabularTranslator",
+								"mappings": [
+									{
+										"source": {
+											"path": "[['name']"
+										},
+										"sink": {
+											"name": "reestr_name",
+											"type": "String"
+										}
+									},
+									{
+										"source": {
+											"path": "[['path']"
+										},
+										"sink": {
+											"name": "file_url",
+											"type": "String"
+										}
+									},
+									{
+										"source": {
+											"path": "$['name']"
+										},
+										"sink": {
+											"name": "file_name",
+											"type": "String"
+										}
+									}
+								],
+								"collectionReference": "$['resources']"
+							}
+						},
+						"inputs": [
+							{
+								"referenceName": "ds_http_json",
+								"type": "DatasetReference",
+								"parameters": {
+									"link": {
+										"value": "@pipeline().parameters.link",
+										"type": "Expression"
+									}
+								}
+							}
+						],
+						"outputs": [
+							{
+								"referenceName": "ds_azure_sql_db",
+								"type": "DatasetReference",
+								"parameters": {
+									"schema": "ing",
+									"table": "reestr_list"
+								}
+							}
+						]
+					},
+					{
+						"name": "sc_update_year_col",
+						"type": "Script",
+						"dependsOn": [
+							{
+								"activity": "cp_reestr_list_to_db",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"linkedServiceName": {
+							"referenceName": "ls_sql_hw1",
+							"type": "LinkedServiceReference"
+						},
+						"typeProperties": {
+							"scripts": [
+								{
+									"type": "Query",
+									"text": {
+										"value": "UPDATE [ing].[reestr_list] SET year = CAST(SUBSTRING(reestr_name, 9, 4) AS INT);",
+										"type": "Expression"
+									}
+								}
+							],
+							"scriptBlockExecutionTimeout": "02:00:00"
+						}
+					},
+					{
+						"name": "lk_link_to_upload",
+						"type": "Lookup",
+						"dependsOn": [
+							{
+								"activity": "sc_update_year_col",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "AzureSqlSource",
+								"sqlReaderQuery": {
+									"value": "@if(equals(pipeline().parameters.year, 'All'), \n 'SELECT file_url, reestr_name, year, concat(reestr_name, ''_part_'', CAST(ROW_NUMBER() OVER(PARTITION BY year ORDER BY year) AS VARCHAR)) AS file_name FROM ing.reestr_list',\nconcat('SELECT file_url, reestr_name, year, concat(reestr_name, ''_part_'', CAST(ROW_NUMBER() OVER(PARTITION BY year ORDER BY year) AS VARCHAR)) AS file_name FROM ing.reestr_list WHERE year = ''', pipeline().parameters.year, '''')\n)",
+									"type": "Expression"
+								},
+								"queryTimeout": "02:00:00",
+								"partitionOption": "None"
+							},
+							"dataset": {
+								"referenceName": "ds_azure_sql_db",
+								"type": "DatasetReference",
+								"parameters": {
+									"schema": "ing",
+									"table": "reestr_list"
+								}
+							},
+							"firstRowOnly": false
+						}
+					},
+					{
+						"name": "fe_upload_files_to_container",
+						"type": "ForEach",
+						"dependsOn": [
+							{
+								"activity": "lk_link_to_upload",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"items": {
+								"value": "@activity('lk_link_to_upload').output.value",
+								"type": "Expression"
+							},
+							"isSequential": false,
+							"activities": [
+								{
+									"name": "ex_pl_unarchive_file",
+									"type": "ExecutePipeline",
+									"dependsOn": [],
+									"policy": {
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"pipeline": {
+											"referenceName": "pl_unarchive_files",
+											"type": "PipelineReference"
+										},
+										"waitOnCompletion": true,
+										"parameters": {
+											"file_url": {
+												"value": "@item().file_url",
+												"type": "Expression"
+											},
+											"file_name": {
+												"value": "@item().file_name",
+												"type": "Expression"
+											},
+											"year": {
+												"value": "@item().year",
+												"type": "Expression"
+											}
+										}
+									}
+								}
+							]
+						}
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {}
+				},
+				"parameters": {
+					"link": {
+						"type": "string",
+						"defaultValue": "https://data.gov.ua/dataset/06779371-308f-42d7-895e-5a39833375f0/datapackage"
+					},
+					"year": {
+						"type": "string",
+						"defaultValue": "2013"
+					}
+				},
+				"annotations": [],
+				"lastPublishTime": "2024-09-24T12:14:48Z"
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/ds_http_json')]",
+				"[concat(variables('factoryId'), '/datasets/ds_azure_sql_db')]",
+				"[concat(variables('factoryId'), '/linkedServices/ls_sql_hw1')]",
+				"[concat(variables('factoryId'), '/pipelines/pl_unarchive_files')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/pl_unarchive_files')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "cp_archive_load_files",
+						"type": "Copy",
+						"state": "Inactive",
+						"onInactiveMarkAs": "Succeeded",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "BinarySource",
+								"storeSettings": {
+									"type": "HttpReadSettings",
+									"requestMethod": "GET"
+								},
+								"formatSettings": {
+									"type": "BinaryReadSettings"
+								}
+							},
+							"sink": {
+								"type": "BinarySink",
+								"storeSettings": {
+									"type": "AzureBlobFSWriteSettings"
+								}
+							},
+							"enableStaging": false
+						},
+						"inputs": [
+							{
+								"referenceName": "ds_http_binary",
+								"type": "DatasetReference",
+								"parameters": {
+									"link": {
+										"value": "@pipeline().parameters.file_url",
+										"type": "Expression"
+									}
+								}
+							}
+						],
+						"outputs": [
+							{
+								"referenceName": "ds_azure_archive_binary",
+								"type": "DatasetReference",
+								"parameters": {
+									"container": "raw",
+									"folder": "archive",
+									"file_name": {
+										"value": "@concat(pipeline().parameters.file_name, '.zip')",
+										"type": "Expression"
+									}
+								}
+							}
+						]
+					},
+					{
+						"name": "cp_unarchive_files",
+						"type": "Copy",
+						"state": "Inactive",
+						"onInactiveMarkAs": "Succeeded",
+						"dependsOn": [
+							{
+								"activity": "cp_archive_load_files",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "DelimitedTextSource",
+								"additionalColumns": [
+									{
+										"name": "REESTR_FILE",
+										"value": {
+											"value": "@pipeline().parameters.file_name",
+											"type": "Expression"
+										}
+									},
+									{
+										"name": "REEST_YEAR",
+										"value": {
+											"value": "@pipeline().parameters.year",
+											"type": "Expression"
+										}
+									}
+								],
+								"storeSettings": {
+									"type": "AzureBlobFSReadSettings",
+									"recursive": true,
+									"enablePartitionDiscovery": false
+								},
+								"formatSettings": {
+									"type": "DelimitedTextReadSettings"
+								}
+							},
+							"sink": {
+								"type": "DelimitedTextSink",
+								"storeSettings": {
+									"type": "AzureBlobFSWriteSettings"
+								},
+								"formatSettings": {
+									"type": "DelimitedTextWriteSettings",
+									"quoteAllText": true,
+									"fileExtension": ".txt"
+								}
+							},
+							"enableStaging": false,
+							"translator": {
+								"type": "TabularTranslator",
+								"mappings": [
+									{
+										"source": {},
+										"sink": {
+											"ordinal": 1
+										}
+									}
+								],
+								"typeConversion": true,
+								"typeConversionSettings": {
+									"allowDataTruncation": true,
+									"treatBooleanAsNumber": false
+								}
+							}
+						},
+						"inputs": [
+							{
+								"referenceName": "ds_azure_unarchive_csv",
+								"type": "DatasetReference",
+								"parameters": {
+									"container": "raw",
+									"folder": "archive",
+									"file_name": {
+										"value": "@concat(pipeline().parameters.file_name, '.zip')",
+										"type": "Expression"
+									},
+									"first_row": "TRUE",
+									"column_delimiter": ";",
+									"compression_type": "ZipDeflate"
+								}
+							}
+						],
+						"outputs": [
+							{
+								"referenceName": "ds_azure_unarchive_csv",
+								"type": "DatasetReference",
+								"parameters": {
+									"container": "raw",
+									"folder": "unarchive",
+									"file_name": {
+										"value": "@concat(pipeline().parameters.file_name, '.csv')",
+										"type": "Expression"
+									},
+									"first_row": "TRUE",
+									"column_delimiter": ";",
+									"compression_type": "None"
+								}
+							}
+						]
+					},
+					{
+						"name": "df_azure_to_ing_reestr_table",
+						"type": "ExecuteDataFlow",
+						"dependsOn": [
+							{
+								"activity": "cp_unarchive_files",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"dataflow": {
+								"referenceName": "df_transform_csv_columns",
+								"type": "DataFlowReference",
+								"parameters": {
+									"year": {
+										"value": "'@{pipeline().parameters.year}'",
+										"type": "Expression"
+									},
+									"file_name": {
+										"value": "'@{pipeline().parameters.file_name}'",
+										"type": "Expression"
+									},
+									"folder": {
+										"value": "'@{activity('cp_unarchive_files').output}'",
+										"type": "Expression"
+									},
+									"container": {
+										"value": "'@{activity('cp_unarchive_files').output}'",
+										"type": "Expression"
+									}
+								},
+								"datasetParameters": {
+									"FilesToTransform": {
+										"container": "raw",
+										"folder": "unrchive",
+										"file_name": {
+											"value": "@pipeline().parameters.file_name",
+											"type": "Expression"
+										},
+										"first_row": true,
+										"column_delimiter": ";",
+										"compression_type": "None"
+									},
+									"renamedColumns": {
+										"schema": "ing",
+										"table": "reestr"
+									}
+								}
+							},
+							"staging": {},
+							"compute": {
+								"coreCount": 8,
+								"computeType": "General"
+							},
+							"traceLevel": "Fine",
+							"continuationSettings": {
+								"customizedCheckpointKey": "9c7b8705-9de0-4f7f-96d9-64c154edaa42"
+							}
+						}
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {}
+				},
+				"parameters": {
+					"file_url": {
+						"type": "string",
+						"defaultValue": "https://data.gov.ua/dataset/06779371-308f-42d7-895e-5a39833375f0/datapackage"
+					},
+					"file_name": {
+						"type": "string",
+						"defaultValue": "reestrTZ2013_part_1.csv"
+					},
+					"year": {
+						"type": "string",
+						"defaultValue": "2013"
+					}
+				},
+				"annotations": [],
+				"lastPublishTime": "2024-09-24T18:50:00Z"
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/ds_http_binary')]",
+				"[concat(variables('factoryId'), '/datasets/ds_azure_archive_binary')]",
+				"[concat(variables('factoryId'), '/datasets/ds_azure_unarchive_csv')]",
+				"[concat(variables('factoryId'), '/dataflows/df_transform_csv_columns')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ds_azure_archive_binary')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "ls_sahw1",
+					"type": "LinkedServiceReference"
+				},
+				"parameters": {
+					"container": {
+						"type": "string"
+					},
+					"folder": {
+						"type": "string"
+					},
+					"file_name": {
+						"type": "string"
+					}
+				},
+				"annotations": [],
+				"type": "Binary",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobFSLocation",
+						"fileName": {
+							"value": "@dataset().file_name",
+							"type": "Expression"
+						},
+						"folderPath": {
+							"value": "@dataset().folder",
+							"type": "Expression"
+						},
+						"fileSystem": {
+							"value": "@dataset().container",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/ls_sahw1')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ds_azure_sql_db')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "ls_sql_hw1",
+					"type": "LinkedServiceReference"
+				},
+				"parameters": {
+					"schema": {
+						"type": "string"
+					},
+					"table": {
+						"type": "string"
+					}
+				},
+				"annotations": [],
+				"type": "AzureSqlTable",
+				"schema": [],
+				"typeProperties": {
+					"schema": {
+						"value": "@dataset().schema",
+						"type": "Expression"
+					},
+					"table": {
+						"value": "@dataset().table",
+						"type": "Expression"
+					}
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/ls_sql_hw1')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ds_azure_unarchive_csv')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "ls_sahw1",
+					"type": "LinkedServiceReference"
+				},
+				"parameters": {
+					"container": {
+						"type": "string"
+					},
+					"folder": {
+						"type": "string"
+					},
+					"file_name": {
+						"type": "string"
+					},
+					"first_row": {
+						"type": "bool"
+					},
+					"column_delimiter": {
+						"type": "string"
+					},
+					"compression_type": {
+						"type": "string"
+					}
+				},
+				"annotations": [],
+				"type": "DelimitedText",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobFSLocation",
+						"fileName": {
+							"value": "@dataset().file_name",
+							"type": "Expression"
+						},
+						"folderPath": {
+							"value": "@dataset().folder",
+							"type": "Expression"
+						},
+						"fileSystem": {
+							"value": "@dataset().container",
+							"type": "Expression"
+						}
+					},
+					"columnDelimiter": {
+						"value": "@dataset().column_delimiter",
+						"type": "Expression"
+					},
+					"compressionCodec": {
+						"value": "@dataset().compression_type",
+						"type": "Expression"
+					},
+					"escapeChar": "\\",
+					"firstRowAsHeader": {
+						"value": "@dataset().first_row",
+						"type": "Expression"
+					},
+					"quoteChar": "\""
+				},
+				"schema": [
+					{
+						"type": "String"
+					},
+					{
+						"type": "String"
+					},
+					{
+						"type": "String"
+					},
+					{
+						"type": "String"
+					},
+					{
+						"type": "String"
+					},
+					{
+						"type": "String"
+					},
+					{
+						"type": "String"
+					},
+					{
+						"type": "String"
+					},
+					{
+						"type": "String"
+					},
+					{
+						"type": "String"
+					},
+					{
+						"type": "String"
+					},
+					{
+						"type": "String"
+					},
+					{
+						"type": "String"
+					},
+					{
+						"type": "String"
+					},
+					{
+						"type": "String"
+					},
+					{
+						"type": "String"
+					},
+					{
+						"type": "String"
+					},
+					{
+						"type": "String"
+					},
+					{
+						"type": "String"
+					},
+					{
+						"type": "String"
+					},
+					{
+						"type": "String"
+					}
+				]
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/ls_sahw1')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ds_http_binary')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "ls_http_hw1",
+					"type": "LinkedServiceReference",
+					"parameters": {
+						"link": {
+							"value": "@dataset().link",
+							"type": "Expression"
+						}
+					}
+				},
+				"parameters": {
+					"link": {
+						"type": "string"
+					}
+				},
+				"annotations": [],
+				"type": "Binary",
+				"typeProperties": {
+					"location": {
+						"type": "HttpServerLocation"
+					}
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/ls_http_hw1')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ds_http_json')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "ls_http_hw1",
+					"type": "LinkedServiceReference",
+					"parameters": {
+						"link": {
+							"value": "@dataset().link",
+							"type": "Expression"
+						}
+					}
+				},
+				"parameters": {
+					"link": {
+						"type": "string"
+					}
+				},
+				"annotations": [],
+				"type": "Json",
+				"typeProperties": {
+					"location": {
+						"type": "HttpServerLocation"
+					}
+				},
+				"schema": {}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/ls_http_hw1')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ds_sql_ing_reestr')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "ls_sql_hw1",
+					"type": "LinkedServiceReference"
+				},
+				"parameters": {
+					"scema": {
+						"type": "string"
+					},
+					"table": {
+						"type": "string"
+					}
+				},
+				"annotations": [],
+				"type": "AzureSqlTable",
+				"schema": [
+					{
+						"name": "PERSON",
+						"type": "nvarchar"
+					},
+					{
+						"name": "REG_ADDR_KOATUU",
+						"type": "nvarchar"
+					},
+					{
+						"name": "OPER_CODE",
+						"type": "nvarchar"
+					},
+					{
+						"name": "OPER_NAME",
+						"type": "nvarchar"
+					},
+					{
+						"name": "D_REG",
+						"type": "date"
+					},
+					{
+						"name": "DEP_CODE",
+						"type": "nvarchar"
+					},
+					{
+						"name": "DEP",
+						"type": "nvarchar"
+					},
+					{
+						"name": "BRAND",
+						"type": "nvarchar"
+					},
+					{
+						"name": "MODEL",
+						"type": "nvarchar"
+					},
+					{
+						"name": "VIN",
+						"type": "nvarchar"
+					},
+					{
+						"name": "MAKE_YEAR",
+						"type": "int",
+						"precision": 10
+					},
+					{
+						"name": "COLOR",
+						"type": "nvarchar"
+					},
+					{
+						"name": "KIND",
+						"type": "nvarchar"
+					},
+					{
+						"name": "BODY",
+						"type": "nvarchar"
+					},
+					{
+						"name": "PURPOSE",
+						"type": "nvarchar"
+					},
+					{
+						"name": "FUEL",
+						"type": "nvarchar"
+					},
+					{
+						"name": "CAPACITY",
+						"type": "decimal",
+						"precision": 10,
+						"scale": 2
+					},
+					{
+						"name": "OWN_WEIGHT",
+						"type": "decimal",
+						"precision": 10,
+						"scale": 2
+					},
+					{
+						"name": "TOTAL_WEIGHT",
+						"type": "decimal",
+						"precision": 10,
+						"scale": 2
+					},
+					{
+						"name": "N_REG_NEW",
+						"type": "nvarchar"
+					},
+					{
+						"name": "inserted_ts",
+						"type": "datetime",
+						"precision": 23,
+						"scale": 3
+					},
+					{
+						"name": "updated_ts",
+						"type": "datetime",
+						"precision": 23,
+						"scale": 3
+					},
+					{
+						"name": "reestr_name",
+						"type": "nvarchar"
+					},
+					{
+						"name": "file_name",
+						"type": "nvarchar"
+					}
+				],
+				"typeProperties": {
+					"schema": "ing",
+					"table": "reestr"
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/ls_sql_hw1')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ls_http_hw1')]",
+			"type": "Microsoft.DataFactory/factories/linkedServices",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"parameters": {
+					"link": {
+						"type": "string"
+					}
+				},
+				"annotations": [],
+				"type": "HttpServer",
+				"typeProperties": {
+					"url": "[parameters('ls_http_hw1_properties_typeProperties_url')]",
+					"enableServerCertificateValidation": true,
+					"authenticationType": "Anonymous"
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ls_kv_hw1')]",
+			"type": "Microsoft.DataFactory/factories/linkedServices",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"annotations": [],
+				"type": "AzureKeyVault",
+				"typeProperties": {
+					"baseUrl": "[parameters('ls_kv_hw1_properties_typeProperties_baseUrl')]"
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ls_sahw1')]",
+			"type": "Microsoft.DataFactory/factories/linkedServices",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"annotations": [],
+				"type": "AzureBlobFS",
+				"typeProperties": {
+					"url": "[parameters('ls_sahw1_properties_typeProperties_url')]",
+					"accountKey": {
+						"type": "SecureString",
+						"value": "[parameters('ls_sahw1_accountKey')]"
+					}
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ls_sql_hw1')]",
+			"type": "Microsoft.DataFactory/factories/linkedServices",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"annotations": [],
+				"type": "AzureSqlDatabase",
+				"typeProperties": {
+					"server": "[parameters('ls_sql_hw1_properties_typeProperties_server')]",
+					"database": "[parameters('ls_sql_hw1_properties_typeProperties_database')]",
+					"encrypt": "mandatory",
+					"trustServerCertificate": false,
+					"authenticationType": "SQL",
+					"userName": "[parameters('ls_sql_hw1_properties_typeProperties_userName')]",
+					"password": {
+						"type": "SecureString",
+						"value": "[parameters('ls_sql_hw1_password')]"
+					}
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/df_transform_csv_columns')]",
+			"type": "Microsoft.DataFactory/factories/dataflows",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"type": "MappingDataFlow",
+				"typeProperties": {
+					"sources": [
+						{
+							"dataset": {
+								"referenceName": "ds_azure_unarchive_csv",
+								"type": "DatasetReference"
+							},
+							"name": "FilesToTransform"
+						}
+					],
+					"sinks": [
+						{
+							"dataset": {
+								"referenceName": "ds_azure_sql_db",
+								"type": "DatasetReference"
+							},
+							"name": "renamedColumns",
+							"rejectedDataLinkedService": {
+								"referenceName": "ls_sahw1",
+								"type": "LinkedServiceReference"
+							}
+						}
+					],
+					"transformations": [
+						{
+							"name": "renameColumns",
+							"description": "Renaming FilesToTransform to renameColumns "
+						},
+						{
+							"name": "derivedColumn",
+							"description": "Creating/updating the columns '_col0_, _col1_, _col2_, _col3_, _col4_, _col5_,_col12_, _col13_, _col14_, _col15_, _col16_, _col17_, _col18_, _col19_, _col20_, VIN"
+						}
+					],
+					"scriptLines": [
+						"parameters{",
+						"     year as string ('2013'),",
+						"     file_name as string ('reestrTZ2013_part_1.csv'),",
+						"     folder as string ('raw/unarchive'),",
+						"     container as string ('raw')",
+						"}",
+						"source(output(",
+						"          {_col0_} as string,",
+						"          {_col1_} as string,",
+						"          {_col2_} as string,",
+						"          {_col3_} as string,",
+						"          {_col4_} as string,",
+						"          {_col5_} as string,",
+						"          {_col6_} as string,",
+						"          {_col7_} as string,",
+						"          {_col8_} as string,",
+						"          {_col9_} as string,",
+						"          {_col10_} as string,",
+						"          {_col11_} as string,",
+						"          {_col12_} as string,",
+						"          {_col13_} as string,",
+						"          {_col14_} as string,",
+						"          {_col15_} as string,",
+						"          {_col16_} as string,",
+						"          {_col17_} as string,",
+						"          {_col18_} as string,",
+						"          {_col19_} as string,",
+						"          {_col20_} as string",
+						"     ),",
+						"     allowSchemaDrift: true,",
+						"     validateSchema: false,",
+						"     limit: 10,",
+						"     ignoreNoFilesFound: false,",
+						"     skipLines: 1,",
+						"     mode: 'read') ~> FilesToTransform",
+						"FilesToTransform select(skipDuplicateMapInputs: true,",
+						"     skipDuplicateMapOutputs: true) ~> renameColumns",
+						"renameColumns derive(VIN = iif(isNull({_col18_}) || trim({_col18_}) == '', 'N/A', trim({_col18_})),",
+						"          reestr_name = 'reestr_name',",
+						"          file_url = 'file_url',",
+						"          file_name = 'file_name',",
+						"          inserted_ts = currentTimestamp(),",
+						"          updated_ts = currentTimestamp()) ~> derivedColumn",
+						"derivedColumn sink(allowSchemaDrift: true,",
+						"     validateSchema: false,",
+						"     deletable:false,",
+						"     insertable:true,",
+						"     updateable:false,",
+						"     upsertable:false,",
+						"     format: 'table',",
+						"     preSQLs:['DELETE FROM ing.reestr'],",
+						"     dateFormat:'dd/MM/yyyy',",
+						"     timestampFormat:'dd/MM/yyyy',",
+						"     booleanFormat: ['true', 'false'],",
+						"     skipDuplicateMapInputs: true,",
+						"     skipDuplicateMapOutputs: true,",
+						"     errorHandlingOption: 'stopOnFirstError',",
+						"     preCommands: [],",
+						"     postCommands: []) ~> renamedColumns"
+					]
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/ds_azure_unarchive_csv')]",
+				"[concat(variables('factoryId'), '/datasets/ds_azure_sql_db')]",
+				"[concat(variables('factoryId'), '/linkedServices/ls_sahw1')]"
+			]
+		}
+	]
+}

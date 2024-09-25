@@ -1,0 +1,33 @@
+{
+	"$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
+	"contentVersion": "1.0.0.0",
+	"parameters": {
+		"factoryName": {
+			"value": "adf-hw1"
+		},
+		"ls_sahw1_accountKey": {
+			"value": ""
+		},
+		"ls_sql_hw1_password": {
+			"value": ""
+		},
+		"ls_http_hw1_properties_typeProperties_url": {
+			"value": "@{linkedService().link}"
+		},
+		"ls_kv_hw1_properties_typeProperties_baseUrl": {
+			"value": "https://kvhw1.vault.azure.net/"
+		},
+		"ls_sahw1_properties_typeProperties_url": {
+			"value": "https://sahw1.dfs.core.windows.net/"
+		},
+		"ls_sql_hw1_properties_typeProperties_server": {
+			"value": "sql-server-hw-1.database.windows.net"
+		},
+		"ls_sql_hw1_properties_typeProperties_database": {
+			"value": "db_reest_tz_ua"
+		},
+		"ls_sql_hw1_properties_typeProperties_userName": {
+			"value": "admin1"
+		}
+	}
+}

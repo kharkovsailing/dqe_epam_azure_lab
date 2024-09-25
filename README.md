@@ -1,4 +1,4 @@
-# dqe_epam_azure_lab
+# MS Azure Data Loading Lab
 The data project for demonstrating knowledge and skills in finding and analysis information using  MS Azure (ADF)
 The main goal:  Implement ADF pipelines loading open data in ASQL table ("stg.reestr"), including ETL with Data Flow Transformation
 Data Base: Azure SQL Database

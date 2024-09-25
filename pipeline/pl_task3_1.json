@@ -1,0 +1,236 @@
+{
+	"name": "pl_task3_1",
+	"properties": {
+		"activities": [
+			{
+				"name": "cp_reestr_list_to_db",
+				"type": "Copy",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "JsonSource",
+						"storeSettings": {
+							"type": "HttpReadSettings",
+							"requestMethod": "GET"
+						},
+						"formatSettings": {
+							"type": "JsonReadSettings"
+						}
+					},
+					"sink": {
+						"type": "AzureSqlSink",
+						"preCopyScript": "DELETE FROM [ing].[reestr_list]",
+						"writeBehavior": "insert",
+						"sqlWriterUseTableLock": false,
+						"disableMetricsCollection": false
+					},
+					"enableStaging": false,
+					"translator": {
+						"type": "TabularTranslator",
+						"mappings": [
+							{
+								"source": {
+									"path": "['name']"
+								},
+								"sink": {
+									"name": "reestr_name",
+									"type": "String"
+								}
+							},
+							{
+								"source": {
+									"path": "['path']"
+								},
+								"sink": {
+									"name": "file_url",
+									"type": "String"
+								}
+							},
+							{
+								"source": {
+									"path": "$['name']"
+								},
+								"sink": {
+									"name": "file_name",
+									"type": "String"
+								}
+							}
+						],
+						"collectionReference": "$['resources']"
+					}
+				},
+				"inputs": [
+					{
+						"referenceName": "ds_http_json",
+						"type": "DatasetReference",
+						"parameters": {
+							"link": {
+								"value": "@pipeline().parameters.link",
+								"type": "Expression"
+							}
+						}
+					}
+				],
+				"outputs": [
+					{
+						"referenceName": "ds_azure_sql_db",
+						"type": "DatasetReference",
+						"parameters": {
+							"schema": "ing",
+							"table": "reestr_list"
+						}
+					}
+				]
+			},
+			{
+				"name": "sc_update_year_col",
+				"type": "Script",
+				"dependsOn": [
+					{
+						"activity": "cp_reestr_list_to_db",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "ls_sql_hw1",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "Query",
+							"text": {
+								"value": "UPDATE [ing].[reestr_list] SET year = CAST(SUBSTRING(reestr_name, 9, 4) AS INT);",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "02:00:00"
+				}
+			},
+			{
+				"name": "lk_link_to_upload",
+				"type": "Lookup",
+				"dependsOn": [
+					{
+						"activity": "sc_update_year_col",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderQuery": {
+							"value": "@if(equals(pipeline().parameters.year, 'All'), \n 'SELECT file_url, reestr_name, year, concat(reestr_name, ''_part_'', CAST(ROW_NUMBER() OVER(PARTITION BY year ORDER BY year) AS VARCHAR)) AS file_name FROM ing.reestr_list',\nconcat('SELECT file_url, reestr_name, year, concat(reestr_name, ''_part_'', CAST(ROW_NUMBER() OVER(PARTITION BY year ORDER BY year) AS VARCHAR)) AS file_name FROM ing.reestr_list WHERE year = ''', pipeline().parameters.year, '''')\n)",
+							"type": "Expression"
+						},
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "ds_azure_sql_db",
+						"type": "DatasetReference",
+						"parameters": {
+							"schema": "ing",
+							"table": "reestr_list"
+						}
+					},
+					"firstRowOnly": false
+				}
+			},
+			{
+				"name": "fe_upload_files_to_container",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "lk_link_to_upload",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('lk_link_to_upload').output.value",
+						"type": "Expression"
+					},
+					"isSequential": false,
+					"activities": [
+						{
+							"name": "ex_pl_unarchive_file",
+							"type": "ExecutePipeline",
+							"dependsOn": [],
+							"policy": {
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "pl_unarchive_files",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true,
+								"parameters": {
+									"file_url": {
+										"value": "@item().file_url",
+										"type": "Expression"
+									},
+									"file_name": {
+										"value": "@item().file_name",
+										"type": "Expression"
+									},
+									"year": {
+										"value": "@item().year",
+										"type": "Expression"
+									}
+								}
+							}
+						}
+					]
+				}
+			}
+		],
+		"parameters": {
+			"link": {
+				"type": "string",
+				"defaultValue": "https://data.gov.ua/dataset/06779371-308f-42d7-895e-5a39833375f0/datapackage"
+			},
+			"year": {
+				"type": "string",
+				"defaultValue": "2013"
+			}
+		},
+		"annotations": [],
+		"lastPublishTime": "2024-09-24T12:14:48Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

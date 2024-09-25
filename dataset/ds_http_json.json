@@ -1,0 +1,29 @@
+{
+	"name": "ds_http_json",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "ls_http_hw1",
+			"type": "LinkedServiceReference",
+			"parameters": {
+				"link": {
+					"value": "@dataset().link",
+					"type": "Expression"
+				}
+			}
+		},
+		"parameters": {
+			"link": {
+				"type": "string"
+			}
+		},
+		"annotations": [],
+		"type": "Json",
+		"typeProperties": {
+			"location": {
+				"type": "HttpServerLocation"
+			}
+		},
+		"schema": {}
+	},
+	"type": "Microsoft.DataFactory/factories/datasets"
+}

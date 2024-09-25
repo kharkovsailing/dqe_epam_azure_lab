@@ -1,0 +1,265 @@
+{
+	"name": "pl_unarchive_files",
+	"properties": {
+		"activities": [
+			{
+				"name": "cp_archive_load_files",
+				"type": "Copy",
+				"state": "Inactive",
+				"onInactiveMarkAs": "Succeeded",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "BinarySource",
+						"storeSettings": {
+							"type": "HttpReadSettings",
+							"requestMethod": "GET"
+						},
+						"formatSettings": {
+							"type": "BinaryReadSettings"
+						}
+					},
+					"sink": {
+						"type": "BinarySink",
+						"storeSettings": {
+							"type": "AzureBlobFSWriteSettings"
+						}
+					},
+					"enableStaging": false
+				},
+				"inputs": [
+					{
+						"referenceName": "ds_http_binary",
+						"type": "DatasetReference",
+						"parameters": {
+							"link": {
+								"value": "@pipeline().parameters.file_url",
+								"type": "Expression"
+							}
+						}
+					}
+				],
+				"outputs": [
+					{
+						"referenceName": "ds_azure_archive_binary",
+						"type": "DatasetReference",
+						"parameters": {
+							"container": "raw",
+							"folder": "archive",
+							"file_name": {
+								"value": "@concat(pipeline().parameters.file_name, '.zip')",
+								"type": "Expression"
+							}
+						}
+					}
+				]
+			},
+			{
+				"name": "cp_unarchive_files",
+				"type": "Copy",
+				"state": "Inactive",
+				"onInactiveMarkAs": "Succeeded",
+				"dependsOn": [
+					{
+						"activity": "cp_archive_load_files",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "DelimitedTextSource",
+						"additionalColumns": [
+							{
+								"name": "REESTR_FILE",
+								"value": {
+									"value": "@pipeline().parameters.file_name",
+									"type": "Expression"
+								}
+							},
+							{
+								"name": "REEST_YEAR",
+								"value": {
+									"value": "@pipeline().parameters.year",
+									"type": "Expression"
+								}
+							}
+						],
+						"storeSettings": {
+							"type": "AzureBlobFSReadSettings",
+							"recursive": true,
+							"enablePartitionDiscovery": false
+						},
+						"formatSettings": {
+							"type": "DelimitedTextReadSettings"
+						}
+					},
+					"sink": {
+						"type": "DelimitedTextSink",
+						"storeSettings": {
+							"type": "AzureBlobFSWriteSettings"
+						},
+						"formatSettings": {
+							"type": "DelimitedTextWriteSettings",
+							"quoteAllText": true,
+							"fileExtension": ".txt"
+						}
+					},
+					"enableStaging": false,
+					"translator": {
+						"type": "TabularTranslator",
+						"mappings": [
+							{
+								"sink": {
+									"ordinal": 1
+								}
+							}
+						],
+						"typeConversion": true,
+						"typeConversionSettings": {
+							"allowDataTruncation": true,
+							"treatBooleanAsNumber": false
+						}
+					}
+				},
+				"inputs": [
+					{
+						"referenceName": "ds_azure_unarchive_csv",
+						"type": "DatasetReference",
+						"parameters": {
+							"container": "raw",
+							"folder": "archive",
+							"file_name": {
+								"value": "@concat(pipeline().parameters.file_name, '.zip')",
+								"type": "Expression"
+							},
+							"first_row": "TRUE",
+							"column_delimiter": ";",
+							"compression_type": "ZipDeflate"
+						}
+					}
+				],
+				"outputs": [
+					{
+						"referenceName": "ds_azure_unarchive_csv",
+						"type": "DatasetReference",
+						"parameters": {
+							"container": "raw",
+							"folder": "unarchive",
+							"file_name": {
+								"value": "@concat(pipeline().parameters.file_name, '.csv')",
+								"type": "Expression"
+							},
+							"first_row": "TRUE",
+							"column_delimiter": ";",
+							"compression_type": "None"
+						}
+					}
+				]
+			},
+			{
+				"name": "df_azure_to_ing_reestr_table",
+				"type": "ExecuteDataFlow",
+				"dependsOn": [
+					{
+						"activity": "cp_unarchive_files",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"dataflow": {
+						"referenceName": "df_transform_csv_columns",
+						"type": "DataFlowReference",
+						"parameters": {
+							"year": {
+								"value": "'@{pipeline().parameters.year}'",
+								"type": "Expression"
+							},
+							"file_name": {
+								"value": "'@{pipeline().parameters.file_name}'",
+								"type": "Expression"
+							},
+							"folder": {
+								"value": "'@{activity('cp_unarchive_files').output}'",
+								"type": "Expression"
+							},
+							"container": {
+								"value": "'@{activity('cp_unarchive_files').output}'",
+								"type": "Expression"
+							}
+						},
+						"datasetParameters": {
+							"FilesToTransform": {
+								"container": "raw",
+								"folder": "unrchive",
+								"file_name": {
+									"value": "@pipeline().parameters.file_name",
+									"type": "Expression"
+								},
+								"first_row": true,
+								"column_delimiter": ";",
+								"compression_type": "None"
+							},
+							"renamedColumns": {
+								"schema": "ing",
+								"table": "reestr"
+							}
+						}
+					},
+					"compute": {
+						"coreCount": 8,
+						"computeType": "General"
+					},
+					"traceLevel": "Fine",
+					"continuationSettings": {
+						"customizedCheckpointKey": "9c7b8705-9de0-4f7f-96d9-64c154edaa42"
+					}
+				}
+			}
+		],
+		"parameters": {
+			"file_url": {
+				"type": "string",
+				"defaultValue": "https://data.gov.ua/dataset/06779371-308f-42d7-895e-5a39833375f0/datapackage"
+			},
+			"file_name": {
+				"type": "string",
+				"defaultValue": "reestrTZ2013_part_1.csv"
+			},
+			"year": {
+				"type": "string",
+				"defaultValue": "2013"
+			}
+		},
+		"annotations": [],
+		"lastPublishTime": "2024-09-24T18:50:00Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

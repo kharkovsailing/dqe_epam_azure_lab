@@ -1,0 +1,104 @@
+{
+	"name": "df_transform_csv_columns",
+	"properties": {
+		"type": "MappingDataFlow",
+		"typeProperties": {
+			"sources": [
+				{
+					"dataset": {
+						"referenceName": "ds_azure_unarchive_csv",
+						"type": "DatasetReference"
+					},
+					"name": "FilesToTransform"
+				}
+			],
+			"sinks": [
+				{
+					"dataset": {
+						"referenceName": "ds_azure_sql_db",
+						"type": "DatasetReference"
+					},
+					"name": "renamedColumns",
+					"rejectedDataLinkedService": {
+						"referenceName": "ls_sahw1",
+						"type": "LinkedServiceReference"
+					}
+				}
+			],
+			"transformations": [
+				{
+					"name": "renameColumns",
+					"description": "Renaming FilesToTransform to renameColumns "
+				},
+				{
+					"name": "derivedColumn",
+					"description": "Creating/updating the columns '_col0_, _col1_, _col2_, _col3_, _col4_, _col5_,_col12_, _col13_, _col14_, _col15_, _col16_, _col17_, _col18_, _col19_, _col20_, VIN"
+				}
+			],
+			"scriptLines": [
+				"parameters{",
+				"     year as string ('2013'),",
+				"     file_name as string ('eestrTZ2013_part_1.csv'),",
+				"     folder as string ('unarchive'),",
+				"     container as string ('raw')",
+				"}",
+				"source(output(",
+				"          {_col0_} as string,",
+				"          {_col1_} as string,",
+				"          {_col2_} as string,",
+				"          {_col3_} as string,",
+				"          {_col4_} as string,",
+				"          {_col5_} as string,",
+				"          {_col6_} as string,",
+				"          {_col7_} as string,",
+				"          {_col8_} as string,",
+				"          {_col9_} as string,",
+				"          {_col10_} as string,",
+				"          {_col11_} as string,",
+				"          {_col12_} as string,",
+				"          {_col13_} as string,",
+				"          {_col14_} as string,",
+				"          {_col15_} as string,",
+				"          {_col16_} as string,",
+				"          {_col17_} as string,",
+				"          {_col18_} as string,",
+				"          {_col19_} as string,",
+				"          {_col20_} as string",
+				"     ),",
+				"     allowSchemaDrift: true,",
+				"     validateSchema: false,",
+				"     limit: 10,",
+				"     ignoreNoFilesFound: false,",
+				"     enableCdc: true,",
+				"     mode: 'read',",
+				"     skipInitialLoad: false,",
+				"     skipLines: 1) ~> FilesToTransform",
+				"FilesToTransform select(skipDuplicateMapInputs: true,",
+				"     skipDuplicateMapOutputs: true) ~> renameColumns",
+				"renameColumns derive(VIN = iif(toString(coalesce(''))=='', 'N/A', trim(toString(coalesce('N/A')))),",
+				"          reestr_name = 'reestr_name',",
+				"          {file_url } = 'file_url ',",
+				"          file_name = 'file_name',",
+				"          inserted_ts = currentTimestamp(),",
+				"          updated_ts = currentTimestamp()) ~> derivedColumn",
+				"derivedColumn sink(allowSchemaDrift: true,",
+				"     validateSchema: false,",
+				"     deletable:false,",
+				"     insertable:true,",
+				"     updateable:false,",
+				"     upsertable:false,",
+				"     format: 'table',",
+				"     preSQLs:['DELETE FROM ing.reestr'],",
+				"     dateFormat:'dd/MM/yyyy',",
+				"     timestampFormat:'dd/MM/yyyy',",
+				"     booleanFormat: ['true', 'false'],",
+				"     skipDuplicateMapInputs: true,",
+				"     skipDuplicateMapOutputs: true,",
+				"     saveOrder: 1,",
+				"     errorHandlingOption: 'stopOnFirstError',",
+				"     preCommands: [],",
+				"     postCommands: []) ~> renamedColumns"
+			]
+		}
+	}
+}

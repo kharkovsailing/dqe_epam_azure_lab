@@ -1,0 +1,133 @@
+{
+	"name": "ds_sql_ing_reestr",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "ls_sql_hw1",
+			"type": "LinkedServiceReference"
+		},
+		"parameters": {
+			"scema": {
+				"type": "string"
+			},
+			"table": {
+				"type": "string"
+			}
+		},
+		"annotations": [],
+		"type": "AzureSqlTable",
+		"schema": [
+			{
+				"name": "PERSON",
+				"type": "nvarchar"
+			},
+			{
+				"name": "REG_ADDR_KOATUU",
+				"type": "nvarchar"
+			},
+			{
+				"name": "OPER_CODE",
+				"type": "nvarchar"
+			},
+			{
+				"name": "OPER_NAME",
+				"type": "nvarchar"
+			},
+			{
+				"name": "D_REG",
+				"type": "date"
+			},
+			{
+				"name": "DEP_CODE",
+				"type": "nvarchar"
+			},
+			{
+				"name": "DEP",
+				"type": "nvarchar"
+			},
+			{
+				"name": "BRAND",
+				"type": "nvarchar"
+			},
+			{
+				"name": "MODEL",
+				"type": "nvarchar"
+			},
+			{
+				"name": "VIN",
+				"type": "nvarchar"
+			},
+			{
+				"name": "MAKE_YEAR",
+				"type": "int",
+				"precision": 10
+			},
+			{
+				"name": "COLOR",
+				"type": "nvarchar"
+			},
+			{
+				"name": "KIND",
+				"type": "nvarchar"
+			},
+			{
+				"name": "BODY",
+				"type": "nvarchar"
+			},
+			{
+				"name": "PURPOSE",
+				"type": "nvarchar"
+			},
+			{
+				"name": "FUEL",
+				"type": "nvarchar"
+			},
+			{
+				"name": "CAPACITY",
+				"type": "decimal",
+				"precision": 10,
+				"scale": 2
+			},
+			{
+				"name": "OWN_WEIGHT",
+				"type": "decimal",
+				"precision": 10,
+				"scale": 2
+			},
+			{
+				"name": "TOTAL_WEIGHT",
+				"type": "decimal",
+				"precision": 10,
+				"scale": 2
+			},
+			{
+				"name": "N_REG_NEW",
+				"type": "nvarchar"
+			},
+			{
+				"name": "inserted_ts",
+				"type": "datetime",
+				"precision": 23,
+				"scale": 3
+			},
+			{
+				"name": "updated_ts",
+				"type": "datetime",
+				"precision": 23,
+				"scale": 3
+			},
+			{
+				"name": "reestr_name",
+				"type": "nvarchar"
+			},
+			{
+				"name": "file_name",
+				"type": "nvarchar"
+			}
+		],
+		"typeProperties": {
+			"schema": "ing",
+			"table": "reestr"
+		}
+	},
+	"type": "Microsoft.DataFactory/factories/datasets"
+}

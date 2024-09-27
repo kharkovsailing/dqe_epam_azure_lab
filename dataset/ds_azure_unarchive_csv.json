@@ -7,22 +7,28 @@
 		},
 		"parameters": {
 			"container": {
-				"type": "string"
+				"type": "string",
+				"defaultValue": "raw"
 			},
 			"folder": {
-				"type": "string"
-			},
-			"file_name": {
-				"type": "string"
+				"type": "string",
+				"defaultValue": "unarchive"
 			},
 			"first_row": {
-				"type": "bool"
+				"type": "bool",
+				"defaultValue": true
 			},
 			"column_delimiter": {
-				"type": "string"
+				"type": "string",
+				"defaultValue": ";"
 			},
 			"compression_type": {
-				"type": "string"
+				"type": "string",
+				"defaultValue": "None"
+			},
+			"file_name": {
+				"type": "string",
+				"defaultValue": "reestrTZ2013_part_1.csv"
 			}
 		},
 		"annotations": [],

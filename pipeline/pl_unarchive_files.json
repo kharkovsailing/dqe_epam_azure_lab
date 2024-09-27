@@ -5,8 +5,6 @@
 			{
 				"name": "cp_archive_load_files",
 				"type": "Copy",
-				"state": "Inactive",
-				"onInactiveMarkAs": "Succeeded",
 				"dependsOn": [],
 				"policy": {
 					"timeout": "0.12:00:00",
@@ -65,8 +63,6 @@
 			{
 				"name": "cp_unarchive_files",
 				"type": "Copy",
-				"state": "Inactive",
-				"onInactiveMarkAs": "Succeeded",
 				"dependsOn": [
 					{
 						"activity": "cp_archive_load_files",
@@ -127,6 +123,10 @@
 						"type": "TabularTranslator",
 						"mappings": [
 							{
+								"source": {
+									"type": "String",
+									"ordinal": 6
+								},
 								"sink": {
 									"ordinal": 1
 								}
@@ -146,13 +146,13 @@
 						"parameters": {
 							"container": "raw",
 							"folder": "archive",
-							"file_name": {
-								"value": "@concat(pipeline().parameters.file_name, '.zip')",
-								"type": "Expression"
-							},
 							"first_row": "TRUE",
 							"column_delimiter": ";",
-							"compression_type": "ZipDeflate"
+							"compression_type": "ZipDeflate",
+							"file_name": {
+								"value": "@pipeline().parameters.file_name",
+								"type": "Expression"
+							}
 						}
 					}
 				],
@@ -163,10 +163,6 @@
 						"parameters": {
 							"container": "raw",
 							"folder": "unarchive",
-							"file_name": {
-								"value": "@concat(pipeline().parameters.file_name, '.csv')",
-								"type": "Expression"
-							},
 							"first_row": "TRUE",
 							"column_delimiter": ";",
 							"compression_type": "None"

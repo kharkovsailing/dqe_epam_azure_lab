@@ -242,6 +242,89 @@
 						"customizedCheckpointKey": "9c7b8705-9de0-4f7f-96d9-64c154edaa42"
 					}
 				}
+			},
+			{
+				"name": "sc_clean_ing_reestr_table",
+				"type": "Script",
+				"dependsOn": [
+					{
+						"activity": "df_azure_to_ing_reestr_table",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "ls_sql_hw1",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"parameters": [
+								{
+									"name": "year",
+									"type": "String",
+									"value": {
+										"value": "@pipeline().parameters.year",
+										"type": "Expression"
+									},
+									"direction": "Input"
+								}
+							],
+							"type": "Query",
+							"text": {
+								"value": "DELETE FROM [stg].[reestr]\nWHERE [reestr_name] IN (\n    SELECT DISTINCT [reestr_name]\n    FROM [ing].[reestr]\n    WHERE [year] = @year\n);\n",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "02:00:00"
+				}
+			},
+			{
+				"name": "sc_merge_into_stg_reestr",
+				"type": "Script",
+				"dependsOn": [
+					{
+						"activity": "sc_clean_ing_reestr_table",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "ls_sql_hw1",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "Query",
+							"text": {
+								"value": "MERGE INTO [stg].[reestr] AS target\nUSING (\n    SELECT *\n    FROM [ing].[reestr]\n    WHERE [year] = @year\n) AS source\nON (\n    (target.[VIN] = source.[VIN] AND target.[reestr_name] = source.[reestr_name])  -- If both VIN and reestr_name exist\n    OR \n    (source.[VIN] IS NULL AND target.[reestr_name] = source.[reestr_name])  -- If VIN is null, match on reestr_name\n)\n\n-- Update rows in target if they exist in both source and target\nWHEN MATCHED THEN\n    UPDATE SET \n        target.[PERSON] = source.[PERSON],\n        target.[REG_ADDR_KOATUU] = source.[REG_ADDR_KOATUU],\n        target.[OPER_CODE] = source.[OPER_CODE],\n        target.[OPER_NAME] = source.[OPER_NAME],\n        target.[D_REG] = source.[D_REG],\n        target.[DEP_CODE] = source.[DEP_CODE],\n        target.[DEP] = source.[DEP],\n        target.[BRAND] = source.[BRAND],\n        target.[MODEL] = source.[MODEL],\n        target.[VIN] = source.[VIN],\n        target.[MAKE_YEAR] = source.[MAKE_YEAR],\n        target.[COLOR] = source.[COLOR],\n        target.[KIND] = source.[KIND],\n        target.[BODY] = source.[BODY],\n        target.[PURPOSE] = source.[PURPOSE],\n        target.[FUEL] = source.[FUEL],\n        target.[CAPACITY] = source.[CAPACITY],\n        target.[OWN_WEIGHT] = source.[OWN_WEIGHT],\n        target.[TOTAL_WEIGHT] = source.[TOTAL_WEIGHT],\n        target.[N_REG_NEW] = source.[N_REG_NEW],\n        target.[updated_ts] = CURRENT_TIMESTAMP\n\n-- Insert rows that exist in source but not in target\nWHEN NOT MATCHED BY TARGET THEN\n    INSERT (\n        [PERSON], [REG_ADDR_KOATUU], [OPER_CODE], [OPER_NAME], [D_REG], \n        [DEP_CODE], [DEP], [BRAND], [MODEL], [VIN], [MAKE_YEAR], [COLOR], \n        [KIND], [BODY], [PURPOSE], [FUEL], [CAPACITY], [OWN_WEIGHT], \n        [TOTAL_WEIGHT], [N_REG_NEW], [reestr_name], [file_name], [inserted_ts], [updated_ts]\n    )\n    VALUES (\n        source.[PERSON], source.[REG_ADDR_KOATUU], source.[OPER_CODE], source.[OPER_NAME], source.[D_REG],\n        source.[DEP_CODE], source.[DEP], source.[BRAND], source.[MODEL], source.[VIN], source.[MAKE_YEAR], source.[COLOR], \n        source.[KIND], source.[BODY], source.[PURPOSE], source.[FUEL], source.[CAPACITY], source.[OWN_WEIGHT], \n        source.[TOTAL_WEIGHT], source.[N_REG_NEW], source.[reestr_name], source.[file_name], CURRENT_TIMESTAMP, CURRENT_TIMESTAMP\n    )\n\n-- Delete rows in target where `reestr_name` exists in source but there is no VIN code\nWHEN NOT MATCHED BY SOURCE AND target.[VIN] IS NULL THEN\n    DELETE;\n",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "02:00:00"
+				}
 			}
 		],
 		"parameters": {
